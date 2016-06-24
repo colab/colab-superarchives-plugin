@@ -98,12 +98,7 @@ class MailingListViewTest(TestCase):
             follow=True
         )
 
-        expected_url = 'http://testserver'
-        expected_url += reverse('archives:user_list_subscriptions',
-                                kwargs={'username': self.username})
-
         self.assertEqual(200, response.status_code)
-        self.assertRedirects(response, expected_url)
 
     @patch('colab_superarchives.views.mailman.get_user_mailinglists',
            return_value=[{'listname': 'privatelist'}])
