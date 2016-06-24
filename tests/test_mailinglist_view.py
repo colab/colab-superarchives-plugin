@@ -85,7 +85,7 @@ class MailingListViewTest(TestCase):
         expected_url = 'http://testserver/account/login'
         expected_message = 'You are not logged in'
 
-        self.assertEqual(200, response.status_code)
+        self.assertEqual(response.status_code, 200)
         self.assertIn(expected_message, response.content)
         self.assertRedirects(response, expected_url)
 
@@ -98,7 +98,7 @@ class MailingListViewTest(TestCase):
             follow=True
         )
 
-        self.assertEqual(200, response.status_code)
+        self.assertEqual(response.status_code, 200)
 
     @patch('colab_superarchives.views.mailman.get_user_mailinglists',
            return_value=[{'listname': 'privatelist'}])
@@ -108,7 +108,7 @@ class MailingListViewTest(TestCase):
             '/archives/mailinglist/privatelist'
         )
 
-        self.assertEqual(200, response.status_code)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.context['thread_list']), 1)
         self.assertEqual(response.context['thread_list'][0].mailinglist.name,
                          'privatelist')
@@ -127,8 +127,8 @@ class MailingListViewTest(TestCase):
 
         lists = response.context['membership'][user.email]
         lists = map(lambda l: l[0], lists)
-        expected_lists = [{'listname': 'alist', 'description': None},
-                          {'listname': 'blist', 'description': None}]
+        expected_lists = [{'listname': 'alist', 'description': None, 'archive_private': None},
+                          {'listname': 'blist', 'description': None, 'archive_private': None}]
 
         self.assertEqual(lists, expected_lists)
 
@@ -144,11 +144,23 @@ class MailingListViewTest(TestCase):
 
         lists = response.context['membership'][user.email]
         lists = map(lambda l: l[0], lists)
-        expected_lists = [{'listname': 'alist', 'description': None}]
+        expected_lists = [{'listname': 'alist', 'description': None, 'archive_private': None}]
         self.assertEqual(lists, expected_lists)
 
         response = self.client.get(url + "?per_page=1&page=2")
         lists = response.context['membership'][user.email]
         lists = map(lambda l: l[0], lists)
-        expected_lists = [{'listname': 'blist', 'description': None}]
+        expected_lists = [{'listname': 'blist', 'description': None, 'archive_private': None}]
         self.assertEqual(lists, expected_lists)
+
+    @patch('colab_superarchives.views.mailman.all_lists',
+           return_value=[{'listname': 'privatelist', 'description': None, 'archive_private': 1}])
+    def test_identification_private_list_on_subscription(self, mock):
+        self.authenticate_user()
+        response = self.client.get(
+            '/archives/' + self.username + '/subscriptions'
+        )
+
+        expected_message = 'Private'
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(expected_message, response.content)

@@ -406,7 +406,7 @@ class MailingListView(ListView):
 
 class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
     # Set the desired quantity of lists per page
-    LISTS_PER_PAGE = 10
+    LISTS_PER_PAGE = getattr(settings, 'LISTS_PER_PAGE', 20)
 
     http_method_names = [u'get', u'post']
     template_name = u'accounts/manage_subscriptions.html'
@@ -436,7 +436,7 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
         user = self.get_object()
         emails = user.emails.values_list('address', flat=True)
         all_lists = mailman.all_lists()
-        all_lists = sorted(all_lists, key=lambda list: list['real_name'])
+        all_lists = sorted(all_lists, key=lambda list: list['listname'])
 
         page = self.request.GET.get('page')
         per_page = self.request.GET.get('per_page')
@@ -447,6 +447,7 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
             lists = []
             lists_for_address = mailman.mailing_lists(address=email,
                                                       names_only=True)
+
             for mlist in all_lists:
                 if mlist.get('listname') in lists_for_address:
                     checked = True
@@ -454,7 +455,8 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
                     checked = False
                 lists.append((
                     {'listname': mlist.get('listname'),
-                     'description': mlist.get('description')},
+                     'description': mlist.get('description'),
+                     'archive_private': mlist.get('archive_private')},
                     checked
                 ))
 
