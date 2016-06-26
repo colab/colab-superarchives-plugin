@@ -426,8 +426,9 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
         context.update(kwargs)
 
 	# Make sure to put list_name back in the page avoiding XSS
-	safe_list_name = self.request.GET.get('list_name', '')\
-			 .replace('\~`!@#$%^&*(){}|_+=-[]\';:"/?.>,<', '')
+	list_name = self.request.GET.get('list_name', '')
+	safe_list_name = str(list_name).translate(None, \
+			 '\~`!@#$%^&*(){}|_+=-[]\';:"/?.>,<')
 	context['list_name'] = safe_list_name
 
         return super(ManageUserSubscriptionsView,
