@@ -19,6 +19,7 @@ from django.utils.translation import ugettext as _
 from django.utils.decorators import method_decorator
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
 
 from colab.accounts.models import User
 from colab.accounts.views import UserProfileBaseMixin
@@ -406,7 +407,7 @@ class MailingListView(ListView):
 
 class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
     # Set the desired quantity of lists per page
-    LISTS_PER_PAGE = getattr(settings, 'LISTS_PER_PAGE', 20)
+    LISTS_PER_PAGE = getattr(settings, 'LISTS_PER_PAGE', 10)
 
     http_method_names = [u'get', u'post']
     template_name = u'accounts/manage_subscriptions.html'
@@ -418,60 +419,95 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
             raise PermissionDenied
         return obj
 
+    def get_context_data(self, **kwargs):
+        user = self.get_object()
+
+        context = self.get_mailling_lists(user)
+        context.update(kwargs)
+
+	# Make sure to put list_name back in the page avoiding XSS
+	list_name = self.request.GET.get('list_name', '')
+	safe_list_name = str(list_name).translate(None, \
+			 '\~`!@#$%^&*(){}|_+=-[]\';:"/?.>,<')
+	context['list_name'] = safe_list_name
+
+        return super(ManageUserSubscriptionsView,
+                     self).get_context_data(**context)
+
     def post(self, request, *args, **kwargs):
         user = self.get_object()
-        for email in user.emails.values_list('address', flat=True):
-            lists = self.request.POST.getlist(email)
-            info_messages = mailman.update_subscription(email, lists)
-            for msg_type, message in info_messages:
-                show_message = getattr(messages, msg_type)
-                show_message(request, _(message))
 
-        return redirect('user_profile', username=user.username)
+        # If it is an ajax request, get the user mailling lists
+        # to display filtering it by name
+        if request.is_ajax():
+            response = self.search_lists_by_name(user,
+                                                 request.POST.get('listname'))
+        else:
+            for email in user.emails.values_list('address', flat=True):
+                lists = self.request.POST.getlist(email)
+                info_messages = mailman.update_subscription(email, lists)
+                for msg_type, message in info_messages:
+                    show_message = getattr(messages, msg_type)
+                    show_message(request, _(message))
 
-    def get_context_data(self, **kwargs):
-        context = {}
-        context['membership'] = {}
+            response = redirect('user_profile', username=user.username)
 
-        user = self.get_object()
+        return response
+
+    def search_lists_by_name(self, user, listname):
+        context = self.get_mailling_lists(user, listname)
+
+        html = render_to_string(u'accounts/subscription_lists.html',
+                                {'membership': context['membership'],
+				 'per_page': context['per_page'],})
+
+        return http.HttpResponse(html)
+
+    def get_mailling_lists(self, user, listname=None):
+        context = {'membership': {},}
+        context['per_page'] = \
+		self.request.GET.get('per_page', self.LISTS_PER_PAGE)
+
         emails = user.emails.values_list('address', flat=True)
-        all_lists = mailman.all_lists()
-        all_lists = sorted(all_lists, key=lambda list: list['listname'])
-
-        page = self.request.GET.get('page')
-        per_page = self.request.GET.get('per_page')
-        per_page = per_page if per_page else self.LISTS_PER_PAGE
-        context['per_page'] = per_page
-
+	
         for email in emails:
-            lists = []
-            lists_for_address = mailman.mailing_lists(address=email,
-                                                      names_only=True)
 
-            for mlist in all_lists:
-                if mlist.get('listname') in lists_for_address:
-                    checked = True
-                else:
-                    checked = False
+            lists = self.filter_lists_by_name(email, listname)
+	    lists = self.add_pagination(lists)
+            context['membership'].update({email: lists})
+
+        return context
+
+    def filter_lists_by_name(self, user_email, listname):
+	all_lists = sorted(mailman.all_lists(), key=lambda l: l['listname'])
+        lists = []
+        lists_for_address = mailman.mailing_lists(address=user_email,
+                                                  names_only=True)
+        for mlist in all_lists:
+
+            if listname is None or listname in mlist.get('listname'):
                 lists.append((
                     {'listname': mlist.get('listname'),
                      'description': mlist.get('description'),
                      'archive_private': mlist.get('archive_private')},
-                    checked
+            	    self.check_user_list(mlist, lists_for_address)
                 ))
 
-            paginator = Paginator(lists, per_page)
+        return lists
 
-            try:
-                lists = paginator.page(page)
-            except PageNotAnInteger:
-                lists = paginator.page(1)
-            except EmptyPage:
-                lists = paginator.page(paginator.num_pages)
+    def check_user_list(self, user_list, user_lists):
+        return user_list.get('listname') in user_lists
 
-            context['membership'].update({email: lists})
+    def add_pagination(self, lists):
+	page = self.request.GET.get('page')
+        per_page = self.request.GET.get('per_page', self.LISTS_PER_PAGE)
+	paginator = Paginator(lists, per_page)
 
-        context.update(kwargs)
-
-        return super(ManageUserSubscriptionsView,
-                     self).get_context_data(**context)
+        try:
+            lists = paginator.page(page)
+        except PageNotAnInteger:
+            lists = paginator.page(1)
+        except EmptyPage:
+            lists = paginator.page(paginator.num_pages)
+	
+	return lists
