@@ -425,11 +425,11 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
         context = self.get_mailling_lists(user)
         context.update(kwargs)
 
-	# Make sure to put list_name back in the page avoiding XSS
-	list_name = self.request.GET.get('list_name', '')
-	safe_list_name = str(list_name).translate(None, \
-			 '\~`!@#$%^&*(){}|_+=-[]\';:"/?.>,<')
-	context['list_name'] = safe_list_name
+        # Make sure to put list_name back in the page avoiding XSS
+        list_name = self.request.GET.get('list_name', '')
+        unsafe_chars = '\~`!@#$%^&*(){}|_+=-[]\';:"/?.>,<'
+        safe_list_name = str(list_name).translate(None, unsafe_chars)
+        context['list_name'] = safe_list_name
 
         return super(ManageUserSubscriptionsView,
                      self).get_context_data(**context)
@@ -459,27 +459,27 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
 
         html = render_to_string(u'accounts/subscription_lists.html',
                                 {'membership': context['membership'],
-				 'per_page': context['per_page'],})
+                                 'per_page': context['per_page'], })
 
         return http.HttpResponse(html)
 
     def get_mailling_lists(self, user, listname=None):
-        context = {'membership': {},}
-        context['per_page'] = \
-		self.request.GET.get('per_page', self.LISTS_PER_PAGE)
+        context = {'membership': {}, }
+        context['per_page'] = self.request.GET.get('per_page',
+                                                   self.LISTS_PER_PAGE)
 
         emails = user.emails.values_list('address', flat=True)
-	
+
         for email in emails:
 
             lists = self.filter_lists_by_name(email, listname)
-	    lists = self.add_pagination(lists)
+            lists = self.add_pagination(lists)
             context['membership'].update({email: lists})
 
         return context
 
     def filter_lists_by_name(self, user_email, listname):
-	all_lists = sorted(mailman.all_lists(), key=lambda l: l['listname'])
+        all_lists = sorted(mailman.all_lists(), key=lambda l: l['listname'])
         lists = []
         lists_for_address = mailman.mailing_lists(address=user_email,
                                                   names_only=True)
@@ -490,7 +490,7 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
                     {'listname': mlist.get('listname'),
                      'description': mlist.get('description'),
                      'archive_private': mlist.get('archive_private')},
-            	    self.check_user_list(mlist, lists_for_address)
+                    self.check_user_list(mlist, lists_for_address)
                 ))
 
         return lists
@@ -499,9 +499,9 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
         return user_list.get('listname') in user_lists
 
     def add_pagination(self, lists):
-	page = self.request.GET.get('page')
+        page = self.request.GET.get('page')
         per_page = self.request.GET.get('per_page', self.LISTS_PER_PAGE)
-	paginator = Paginator(lists, per_page)
+        paginator = Paginator(lists, per_page)
 
         try:
             lists = paginator.page(page)
@@ -509,5 +509,5 @@ class ManageUserSubscriptionsView(UserProfileBaseMixin, DetailView):
             lists = paginator.page(1)
         except EmptyPage:
             lists = paginator.page(paginator.num_pages)
-	
-	return lists
+
+        return lists

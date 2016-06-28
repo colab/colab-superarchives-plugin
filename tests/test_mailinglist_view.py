@@ -127,8 +127,10 @@ class MailingListViewTest(TestCase):
 
         lists = response.context['membership'][user.email]
         lists = map(lambda l: l[0], lists)
-        expected_lists = [{'listname': 'alist', 'description': None, 'archive_private': None},
-                          {'listname': 'blist', 'description': None, 'archive_private': None}]
+        expected_lists = [{'listname': 'alist', 'description': None,
+                           'archive_private': None},
+                          {'listname': 'blist', 'description': None,
+                           'archive_private': None}]
 
         self.assertEqual(lists, expected_lists)
 
@@ -144,17 +146,20 @@ class MailingListViewTest(TestCase):
 
         lists = response.context['membership'][user.email]
         lists = map(lambda l: l[0], lists)
-        expected_lists = [{'listname': 'alist', 'description': None, 'archive_private': None}]
+        expected_lists = [{'listname': 'alist', 'description': None,
+                           'archive_private': None}]
         self.assertEqual(lists, expected_lists)
 
         response = self.client.get(url + "?per_page=1&page=2")
         lists = response.context['membership'][user.email]
         lists = map(lambda l: l[0], lists)
-        expected_lists = [{'listname': 'blist', 'description': None, 'archive_private': None}]
+        expected_lists = [{'listname': 'blist', 'description': None,
+                           'archive_private': None}]
         self.assertEqual(lists, expected_lists)
 
     @patch('colab_superarchives.views.mailman.all_lists',
-           return_value=[{'listname': 'privatelist', 'description': None, 'archive_private': 1}])
+           return_value=[{'listname': 'privatelist', 'description': None,
+                          'archive_private': 1}])
     def test_identification_private_list_on_subscription(self, mock):
         self.authenticate_user()
         response = self.client.get(
